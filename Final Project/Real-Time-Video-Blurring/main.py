@@ -4,6 +4,21 @@ import numpy as np
 import easyocr
 import torch
 import csv
+import os
+import gdown
+
+# === Step 0: Download YOLO Weights from Google Drive if missing ===
+def download_weights():
+    file_id = "1Hd3fh6jLHMKu7ysqN9C001n8-XpxiDAW"  # Replace with your Google Drive file ID
+    weights_path = "yolov3_training_2000.weights"
+    download_url = f"https://drive.google.com/drive/folders/1Hd3fh6jLHMKu7ysqN9C001n8-XpxiDAW?usp=drive_link"
+    if not os.path.exists(weights_path):
+        print("Downloading YOLO weights from Google Drive...")
+        gdown.download(download_url, weights_path, quiet=False)
+    else:
+        print("YOLO weights already exist.")
+
+download_weights()
 
 # === Load Malicious Words from CSV ===
 def load_malicious_words_from_csv(filepath):
@@ -45,14 +60,11 @@ def process_sensitive_text(frame, result):
         top_left = tuple(map(int, top_left))
         bottom_right = tuple(map(int, bottom_right))
 
-        # Expand the bounding box slightly for better blur coverage
-        expansion_factor = 20
-        top_left = (top_left[0] - expansion_factor, top_left[1] - expansion_factor)
-        bottom_right = (bottom_right[0] + expansion_factor, bottom_right[1] + expansion_factor)
-
-        # Ensure within frame bounds
-        top_left = (max(0, top_left[0]), max(0, top_left[1]))
-        bottom_right = (min(frame.shape[1], bottom_right[0]), min(frame.shape[0], bottom_right[1]))
+        # Expand the bounding box slightly
+        expansion = 20
+        top_left = (max(0, top_left[0] - expansion), max(0, top_left[1] - expansion))
+        bottom_right = (min(frame.shape[1], bottom_right[0] + expansion),
+                        min(frame.shape[0], bottom_right[1] + expansion))
 
         # Check for sensitive or malicious text
         blur_text = any(re.search(pattern, text) for pattern in sensitive_patterns) or \
@@ -68,9 +80,7 @@ def detect_weapons(frame):
     net.setInput(blob)
     outs = net.forward(output_layer_names)
 
-    boxes = []
-    confidences = []
-    class_ids = []
+    boxes, confidences, class_ids = [], [], []
 
     for out in outs:
         for detection in out:
